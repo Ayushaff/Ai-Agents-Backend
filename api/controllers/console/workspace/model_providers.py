@@ -1,5 +1,5 @@
 import io
-
+import os
 from flask import send_file
 from flask_login import current_user
 from flask_restful import Resource, reqparse
@@ -84,6 +84,41 @@ class ModelProviderValidateApi(Resource):
         return response
 
 
+# class ModelProviderApi(Resource):
+#     @setup_required
+#     @login_required
+#     @account_initialization_required
+#     def post(self, provider: str):
+#         if not current_user.is_admin_or_owner:
+#             raise Forbidden()
+
+#         parser = reqparse.RequestParser()
+#         parser.add_argument("credentials", type=dict, required=True, nullable=False, location="json")
+#         args = parser.parse_args()
+
+#         model_provider_service = ModelProviderService()
+
+#         try:
+#             model_provider_service.save_provider_credentials(
+#                 tenant_id=current_user.current_tenant_id, provider=provider, credentials=args["credentials"]
+#             )
+#         except CredentialsValidateFailedError as ex:
+#             raise ValueError(str(ex))
+
+#         return {"result": "success"}, 201
+
+#     @setup_required
+#     @login_required
+#     @account_initialization_required
+#     def delete(self, provider: str):
+#         if not current_user.is_admin_or_owner:
+#             raise Forbidden()
+
+#         model_provider_service = ModelProviderService()
+#         model_provider_service.remove_provider_credentials(tenant_id=current_user.current_tenant_id, provider=provider)
+
+#         return {"result": "success"}, 204
+
 class ModelProviderApi(Resource):
     @setup_required
     @login_required
@@ -94,19 +129,49 @@ class ModelProviderApi(Resource):
 
         parser = reqparse.RequestParser()
         parser.add_argument("credentials", type=dict, required=True, nullable=False, location="json")
+        parser.add_argument("config_from", type=str, required=False, location="json")
+        parser.add_argument("load_balancing", type=dict, required=False, location="json")
         args = parser.parse_args()
+
+        credentials = args["credentials"]
+
+        # Check if any credential value is "Rentprompts key"
+        rentprompts_keys = [k for k, v in credentials.items() if v == "Rentprompts key"]
+
+        # Get the provider type from the provider string (similar to frontend)
+        provider_type = provider.split('/')[-1] if '/' in provider else provider
+
+        # Map provider types to their respective environment variables
+        env_var_mapping = {
+            'openai': 'RENTPROMPTS_OPENAI_API_KEY',
+            'openrouter': 'RENTPROMPTS_OPENROUTE_API_KEY',
+            'groq': 'RENTPROMPTS_GROQ_API_KEY'
+            # Add other providers as needed
+        }
+
+        # Get the appropriate environment variable for this provider
+        env_var_name = env_var_mapping.get(provider_type.lower())
+
+        # If there are any Rentprompts keys, replace them with the env value
+        if rentprompts_keys and env_var_name:
+            env_value = os.environ.get(env_var_name)
+            if not env_value:
+                raise ValueError(f"Environment variable {env_var_name} not set for Rentprompts key")
+            for key in rentprompts_keys:
+                credentials[key] = env_value
 
         model_provider_service = ModelProviderService()
 
         try:
             model_provider_service.save_provider_credentials(
-                tenant_id=current_user.current_tenant_id, provider=provider, credentials=args["credentials"]
+                tenant_id=current_user.current_tenant_id, 
+                provider=provider, 
+                credentials=credentials
             )
         except CredentialsValidateFailedError as ex:
             raise ValueError(str(ex))
 
         return {"result": "success"}, 201
-
     @setup_required
     @login_required
     @account_initialization_required
@@ -118,7 +183,6 @@ class ModelProviderApi(Resource):
         model_provider_service.remove_provider_credentials(tenant_id=current_user.current_tenant_id, provider=provider)
 
         return {"result": "success"}, 204
-
 
 class ModelProviderIconApi(Resource):
     """

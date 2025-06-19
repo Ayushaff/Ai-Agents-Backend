@@ -175,28 +175,62 @@ class AccountTimezoneApi(Resource):
         return updated_account
 
 
+# class AccountPasswordApi(Resource):
+#     @setup_required
+#     @login_required
+#     @account_initialization_required
+#     @marshal_with(account_fields)
+#     def post(self):
+#         parser = reqparse.RequestParser()
+#         # parser.add_argument("password", type=str, required=False, location="json")
+#         parser.add_argument("email", type=str, required=False, location="json")
+#         parser.add_argument("new_password", type=str, required=True, location="json")
+#         parser.add_argument("repeat_new_password", type=str, required=True, location="json")
+#         args = parser.parse_args()
+
+#         if args["new_password"] != args["repeat_new_password"]:
+#             raise RepeatPasswordNotMatchError()
+
+#         try:
+#             AccountService.update_account_password_by_email(
+#                 email=args["email"],
+#                 new_password=args["new_password"]
+#             )
+#         except ServiceCurrentPasswordIncorrectError:
+#             raise CurrentPasswordIncorrectError()
+
+#         return {"result": "success"}
+
 class AccountPasswordApi(Resource):
     @setup_required
-    @login_required
-    @account_initialization_required
-    @marshal_with(account_fields)
     def post(self):
         parser = reqparse.RequestParser()
-        parser.add_argument("password", type=str, required=False, location="json")
+        parser.add_argument("email", type=str, required=True, location="json")  # Required email
         parser.add_argument("new_password", type=str, required=True, location="json")
         parser.add_argument("repeat_new_password", type=str, required=True, location="json")
         args = parser.parse_args()
 
+        # 1. Validate passwords match
         if args["new_password"] != args["repeat_new_password"]:
             raise RepeatPasswordNotMatchError()
 
+        # # 2. Verify email exists in system (basic check)
+        # account = Account.query.filter_by(email=email).first()
+        # if not account:
+        #     raise CurrentPasswordIncorrectError()
+        
+        # print("account inside account pass api:", account)
+
+        # 3. Update password (no current password check)
         try:
-            AccountService.update_account_password(current_user, args["password"], args["new_password"])
-        except ServiceCurrentPasswordIncorrectError:
+            AccountService.update_account_password_by_email(
+                email=args["email"],
+                new_password=args["new_password"]
+            )
+        except Exception as e:
             raise CurrentPasswordIncorrectError()
 
         return {"result": "success"}
-
 
 class AccountIntegrateApi(Resource):
     integrate_fields = {
